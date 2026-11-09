@@ -49,7 +49,7 @@ def checkout(revision, root, environment):
     source.mkdir(mode=0o700)
     keyfile, hosts = root/'read-key', root/'known-hosts'
     try:
-        keyfile.write_text(key+'\n', encoding='utf-8')
+        keyfile.write_text(key.replace('\r\n', '\n').rstrip('\n')+'\n', encoding='utf-8', newline='\n')
         keyfile.chmod(0o600)
         meta = subprocess.run(['gh', 'api', 'meta'], env=environment, capture_output=True, check=False)
         if meta.returncode:
@@ -67,6 +67,10 @@ def checkout(revision, root, environment):
         ]:
             result = subprocess.run(['git', *arguments], cwd=source, env=git_env, capture_output=True)
             if result.returncode:
+                if b'error in libcrypto' in result.stderr or b'invalid format' in result.stderr:
+                    raise CheckFailure('source_key_format')
+                if b'Permission denied (publickey)' in result.stderr:
+                    raise CheckFailure('source_key_access')
                 raise CheckFailure('source_checkout')
         head = subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=source, capture_output=True, check=True)
         if head.stdout.decode().strip() != revision:

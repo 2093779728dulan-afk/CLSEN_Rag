@@ -45,6 +45,17 @@ class PrivacyContract(unittest.TestCase):
             self.assertFalse((root/'read-key').exists())
             self.assertFalse((root/'known-hosts').exists())
 
+    def test_checkout_normalizes_windows_key_newlines(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            def fail_meta(*arguments, **keywords):
+                self.assertEqual((root/'read-key').read_bytes(), b'SYNTHETIC\nKEY\n')
+                return SimpleNamespace(returncode=1)
+            with patch.object(runner.subprocess, 'run', side_effect=fail_meta):
+                with self.assertRaises(runner.CheckFailure):
+                    runner.checkout('1'*40, root, {'CLSEN_SOURCE_READ_KEY': 'SYNTHETIC\r\nKEY\r\n'})
+            self.assertFalse((root/'read-key').exists())
+
     def test_xml_only_exposes_numeric_totals(self):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary)/'result.xml'
