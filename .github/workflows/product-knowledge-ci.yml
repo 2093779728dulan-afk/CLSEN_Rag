@@ -1,0 +1,48 @@
+name: Product Knowledge CI
+run-name: Product Knowledge CI ${{ inputs.revision }}
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Full 40-character commit SHA in the private source repository
+        required: true
+        type: string
+permissions:
+  contents: read
+defaults:
+  run:
+    shell: bash
+concurrency:
+  group: private-source-ci-${{ inputs.revision }}
+  cancel-in-progress: true
+jobs:
+  knowledge:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: private-source-ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prepare private workspace
+        run: python -B ci/run_private_checks.py prepare
+      - name: Checkout exact private source
+        env:
+          SOURCE_REVISION: ${{ inputs.revision }}
+          CLSEN_SOURCE_READ_KEY: ${{ secrets.CLSEN_SOURCE_READ_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: python -B ci/run_private_checks.py checkout
+      - name: Check private source without credentials
+        env:
+          SOURCE_REVISION: ${{ inputs.revision }}
+        run: python -B ci/run_private_checks.py check
+      - name: Clean private workspace
+        if: always()
+        run: python -B ci/run_private_checks.py cleanup
